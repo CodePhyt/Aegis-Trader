@@ -1,0 +1,81 @@
+{
+    "project_name": "Project_Predator_V1",
+    "version": "1.0.0",
+    "architecture": "Asynchronous Micro-Services (Local-First)",
+    "role_definition": "Senior Algorithmic Trading Architect",
+    "tech_stack": {
+        "language": "Python 3.11+",
+        "exchange_library": "ccxt.pro (WebSocket Enabled)",
+        "database": "SQLAlchemy + aiosqlite",
+        "api_framework": "FastAPI (for future dashboard)",
+        "logging": "loguru",
+        "notifications": "python-telegram-bot"
+    },
+    "directory_structure": {
+        "core": [
+            "scanner.py",
+            "strategist.py",
+            "executor.py"
+        ],
+        "database": [
+            "db_manager.py",
+            "models.py"
+        ],
+        "utils": [
+            "logger.py",
+            "notifier.py"
+        ],
+        "config": [
+            ".env",
+            "settings.py"
+        ]
+    },
+    "database_schema": {
+        "positions_table": {
+            "columns": {
+                "symbol": "String (Primary Key)",
+                "entry_price": "Float",
+                "amount": "Float",
+                "is_initial_recovered": "Boolean (Default: False)",
+                "trailing_stop_active": "Boolean (Default: False)",
+                "last_price": "Float"
+            }
+        }
+    },
+    "logic_modules": {
+        "scanner": "Use 'watch_tickers' for real-time WebSocket price feeds. Push updates to strategist.",
+        "strategist": {
+            "primary_rule": "IF price >= entry_price * 2 AND is_initial_recovered == False THEN EXECUTE(sell_50_percent)",
+            "secondary_rule": "IF is_initial_recovered == True THEN ACTIVATE(trailing_stop_5_percent)",
+            "safety_checks": [
+                "Min Notional Check",
+                "Precision Handling",
+                "Insufficient Balance Guard"
+            ]
+        },
+        "executor": "Atomic Market Sell execution with automatic retry logic (3 attempts) and Telegram alerts."
+    },
+    "implementation_steps": [
+        {
+            "step": 1,
+            "task": "Initialize project structure and install dependencies in requirements.txt."
+        },
+        {
+            "step": 2,
+            "task": "Setup aiosqlite database manager and define position models."
+        },
+        {
+            "step": 3,
+            "task": "Implement CCXT.pro WebSocket listener for high-frequency price tracking."
+        },
+        {
+            "step": 4,
+            "task": "Create the 'Predator Engine' to link DB positions with live price feeds."
+        },
+        {
+            "step": 5,
+            "task": "Add Simulation Mode (Dry Run) to test logic without real API execution."
+        }
+    ],
+    "bot_personality": "Aggressive, high-speed, and ultra-precise. Focus on liquidity and zero-latency execution."
+}

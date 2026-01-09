@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  predator-backend:
+    build: .
+    container_name: aegis_trader_core
+    restart: unless-stopped
+    volumes:
+      - ./tradebot.db:/app/tradebot.db
+      - ./tradebot.log:/app/tradebot.log
+      - ./.env:/app/.env
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: [ "python", "bot_brain.py" ]
+
+  predator-portal:
+    build: .
+    container_name: aegis_trader_portal
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./tradebot.db:/app/tradebot.db
+      - ./tradebot.log:/app/tradebot.log
+      - ./.env:/app/.env
+    command: [ "streamlit", "run", "portal.py" ]

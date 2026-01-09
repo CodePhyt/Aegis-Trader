@@ -1,0 +1,30 @@
+# Environment Variables
+.env
+.env.local
+
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Database & Logs
+tradebot.db
+tradebot.log
+*.sqlite
+*.sqlite3
+
+# Tools
+.vscode/
+.idea/
+.pytest_cache/
+coverage.xml
+htmlcov/
+
+# Mac
+.DS_Store

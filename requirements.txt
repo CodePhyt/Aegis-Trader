@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+ccxt
+sqlalchemy
+aiosqlite
+python-dotenv
+pytest-asyncio
+loguru
+streamlit
+plotly
+pandas
+httpx
+plyer
+pytest

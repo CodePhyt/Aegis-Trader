@@ -1,0 +1,19 @@
+{
+    "strategy": {
+        "moonbag_target_multiplier": 2.0,
+        "initial_sell_percentage": 0.5,
+        "trailing_stop_percentage": 0.05,
+        "slippage_tolerance_pct": 0.005,
+        "volatility_guard_window_seconds": 5,
+        "max_slippage_retry_chunks": 3
+    },
+    "exchange": {
+        "timeout": 30000,
+        "rate_limit_buffer": 0.1
+    },
+    "system": {
+        "log_level": "INFO",
+        "websocket_reconnect_delay": 5,
+        "websocket_watchdog_timeout": 30
+    }
+}
