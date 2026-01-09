@@ -46,7 +46,7 @@ Aegis-Trader includes a self-hosted **Streamlit** dashboard for real-time monito
 
 ### 1. Clone & Configure
 ```bash
-git clone https://github.com/your-username/aegis-trader.git
+git clone https://github.com/CodePhyt/Aegis-Trader.git
 cd aegis-trader
 cp .env.example .env
 # Edit .env with your Exchange API Keys (Keep them SAFE!)
