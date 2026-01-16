@@ -12,6 +12,7 @@ class ExchangeClient:
         self.exchange_id = exchange_id
         self.api_key = os.getenv("API_KEY")
         self.api_secret = os.getenv("API_SECRET")
+        self.quote_currency = os.getenv("QUOTE_CURRENCY", "USDT")
         self.client = getattr(ccxt, exchange_id)({
             'apiKey': self.api_key,
             'secret': self.api_secret,
@@ -22,6 +23,12 @@ class ExchangeClient:
         })
         self.logger = logging.getLogger("ExchangeClient")
 
+    def normalize_symbol(self, symbol: str) -> str:
+        """
+        Normalize symbols to include a quote currency when missing.
+        """
+        return f"{symbol}/{self.quote_currency}" if '/' not in symbol else symbol
+
     async def fetch_tickers(self, symbols: List[str]) -> Dict[str, float]:
         """
         Fetch multiple tickers at once if supported, or parallelize.
@@ -30,39 +37,39 @@ class ExchangeClient:
         if not symbols:
             return {}
             
-        try:
-            # CCXT fetch_tickers support varies. 
-            # If supported, it's 1 call. 
-            # We assume most major exchanges support it.
-            # Convert 'BTC' to 'BTC/USDT' roughly for crypto
-            pairs = [f"{s}/USDT" if '/' not in s else s for s in symbols]
-            
-            # Check capabilities
-            if self.client.has['fetchTickers']:
+        # CCXT fetch_tickers support varies. If supported, it's 1 call.
+        pairs = [self.normalize_symbol(s) for s in symbols]
+        results = {}
+
+        if self.client.has.get('fetchTickers'):
+            try:
                 tickers = await self.client.fetch_tickers(pairs)
                 # Map back to simple symbol if needed or just return last price
-                results = {}
                 for pair, data in tickers.items():
+                    if not isinstance(data, dict):
+                        continue
+                    last = data.get('last') or data.get('close')
+                    if last is None:
+                        continue
                     # extract 'BTC' from 'BTC/USDT'
                     sym = pair.split('/')[0] if '/' in pair else pair
-                    results[sym] = data['last']
-                return results
-            else:
-                # Fallback to parallel fetch
-                # Semaphore to avoid rate limits
-                results = {}
-                # TODO: Implement parallel fetch with semaphore
-                # For now sequential fallback logic (simplified)
-                for s in symbols:
-                    results[s] = await self.get_current_price(s)
-                return results
+                    results[sym] = last
+                if results:
+                    return results
+            except Exception as e:
+                self.logger.error(f"Batch Tick Error: {e}")
 
-        except Exception as e:
-            self.logger.error(f"Batch Tick Error: {e}")
-            return {}
+        # Fallback to sequential fetch if batch is unsupported or empty.
+        for s in symbols:
+            try:
+                results[s] = await self.get_current_price(s)
+            except Exception as e:
+                self.logger.error(f"Tick Error {s}: {e}")
+
+        return results
 
     async def get_exchange_id(self):
-        return self.client.idclose()
+        return self.client.id
 
     async def close(self):
         await self.client.close()
@@ -74,13 +81,34 @@ class ExchangeClient:
         """
         try:
             balance = await self.client.fetch_balance()
-            # Filter for non-zero free balances, exclude USDT/USD usually if not trading against it
-            # But here we just want non-zero assets
-            non_zero = {
-                k: v['free'] 
-                for k, v in balance.items() 
-                if v['free'] > 0 and k not in ['USDT', 'USD', 'USDC'] # simplified exclusion
-            }
+            # Filter for non-zero free balances, exclude stablecoins.
+            # CCXT returns both aggregate keys and per-currency dicts.
+            excluded = {"USDT", "USD", "USDC"}
+            non_zero: Dict[str, float] = {}
+
+            for symbol, data in balance.items():
+                if symbol in {"info", "free", "used", "total"}:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                free = data.get("free")
+                try:
+                    free_amount = float(free)
+                except (TypeError, ValueError):
+                    continue
+                if free_amount > 0 and symbol not in excluded:
+                    non_zero[symbol] = free_amount
+
+            # Fallback to the aggregate free dict if currency entries are missing.
+            if not non_zero and isinstance(balance.get("free"), dict):
+                for symbol, free in balance["free"].items():
+                    try:
+                        free_amount = float(free)
+                    except (TypeError, ValueError):
+                        continue
+                    if free_amount > 0 and symbol not in excluded:
+                        non_zero[symbol] = free_amount
+
             return non_zero
         except Exception as e:
             self.logger.error(f"Error fetching balance: {e}")
@@ -90,7 +118,7 @@ class ExchangeClient:
         """
         Get current price for a symbol. Assumes USDT pair if no slash.
         """
-        pair = f"{symbol}/USDT" if '/' not in symbol else symbol
+        pair = self.normalize_symbol(symbol)
         try:
             ticker = await self.client.fetch_ticker(pair)
             return ticker['last']
@@ -103,7 +131,7 @@ class ExchangeClient:
         """
         Market sell 50% (or specified amount).
         """
-        pair = f"{symbol}/USDT"
+        pair = self.normalize_symbol(symbol)
         try:
             # Fetch market structure to check min notional if possible, but keeping simple for MVP
             self.logger.info(f"EXECUTING SELL: {symbol} amount={amount}")

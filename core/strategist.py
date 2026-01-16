@@ -7,7 +7,7 @@ It implements:
 2. Volatility Guard: Prevent selling into fakeout wicks.
 3. Hedged Trailing Stop: Protect the remaining 50% 'free roll'.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from loguru import logger
 from database import Position
 from core.executor import TradeExecutor
@@ -16,7 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 class Strategist:
     def __init__(self, executor: TradeExecutor, config: dict):
         self.executor = executor
-        self.config = config['strategy']
+        defaults = {
+            "moonbag_target_multiplier": 2.0,
+            "initial_sell_percentage": 0.5,
+            "trailing_stop_percentage": 0.05,
+            "volatility_guard_window_seconds": 5,
+        }
+        strategy = config.get('strategy', {})
+        self.config = {**defaults, **strategy}
         self.target_multiplier = self.config['moonbag_target_multiplier']
         self.trailing_stop_pct = self.config['trailing_stop_percentage']
         self.volatility_window = self.config['volatility_guard_window_seconds']
@@ -88,7 +95,7 @@ class Strategist:
         """
         Returns True if price has been stable/high for X seconds.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if symbol not in self.pump_candidates:
             self.pump_candidates[symbol] = (now, price)
             logger.info(f"Volatility Guard: {symbol} hit target. Waiting {self.volatility_window}s...")

@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 
 from database import get_db_session, Position, TradeHistory
 import os
@@ -34,7 +34,7 @@ class SettingsUpdate(BaseModel):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "timestamp": datetime.utcnow()}
+    return {"status": "ok", "timestamp": datetime.now(timezone.utc)}
 
 @app.get("/portfolio", response_model=List[PositionRead])
 async def get_portfolio(db: AsyncSession = Depends(get_db_session)):
