@@ -22,6 +22,12 @@ class ExchangeClient:
         })
         self.logger = logging.getLogger("ExchangeClient")
 
+    def normalize_symbol(self, symbol: str) -> str:
+        """
+        Normalize symbols to include a quote currency when missing.
+        """
+        return f"{symbol}/USDT" if '/' not in symbol else symbol
+
     async def fetch_tickers(self, symbols: List[str]) -> Dict[str, float]:
         """
         Fetch multiple tickers at once if supported, or parallelize.
@@ -35,7 +41,7 @@ class ExchangeClient:
             # If supported, it's 1 call. 
             # We assume most major exchanges support it.
             # Convert 'BTC' to 'BTC/USDT' roughly for crypto
-            pairs = [f"{s}/USDT" if '/' not in s else s for s in symbols]
+            pairs = [self.normalize_symbol(s) for s in symbols]
             
             # Check capabilities
             if self.client.has['fetchTickers']:
@@ -111,7 +117,7 @@ class ExchangeClient:
         """
         Get current price for a symbol. Assumes USDT pair if no slash.
         """
-        pair = f"{symbol}/USDT" if '/' not in symbol else symbol
+        pair = self.normalize_symbol(symbol)
         try:
             ticker = await self.client.fetch_ticker(pair)
             return ticker['last']
@@ -124,7 +130,7 @@ class ExchangeClient:
         """
         Market sell 50% (or specified amount).
         """
-        pair = f"{symbol}/USDT"
+        pair = self.normalize_symbol(symbol)
         try:
             # Fetch market structure to check min notional if possible, but keeping simple for MVP
             self.logger.info(f"EXECUTING SELL: {symbol} amount={amount}")

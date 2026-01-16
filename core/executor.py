@@ -54,8 +54,10 @@ class TradeExecutor:
         """
         # Fetch top of book - usually enough for small retail.
         # For "Predator", we fetch depth.
-        ob = await self.exchange.client.fetch_order_book(symbol, limit=20)
-        orders = ob['bids'] if side == 'sell' else ob['asks']
+        pair = self.exchange.normalize_symbol(symbol)
+        ob = await self.exchange.client.fetch_order_book(pair, limit=20)
+        orders = ob.get('bids') if side == 'sell' else ob.get('asks')
+        orders = orders or []
         
         filled = 0.0
         weighted_sum = 0.0
@@ -68,10 +70,11 @@ class TradeExecutor:
             if filled >= amount:
                 break
         
+        if filled == 0:
+            return await self.exchange.get_current_price(symbol)
         if filled < amount:
-            # Not enough liquidity in top 20!
-            # Fallback to last price or risky.
-            return orders[-1][0] 
+            # Not enough liquidity in top 20; use average of available depth.
+            return weighted_sum / filled
             
         return weighted_sum / amount
 
@@ -79,14 +82,28 @@ class TradeExecutor:
         """
         Liquidity-aware sell. Splits order if slippage is too high.
         """
+        if total_amount <= 0:
+            logger.warning(f"Executor: Skipping sell for {symbol} amount={total_amount}")
+            return []
         logger.info(f"Executor: Analyzing sell for {total_amount} {symbol}...")
         
-        ticker = await self.exchange.client.fetch_ticker(symbol)
-        last_price = ticker['last']
+        pair = self.exchange.normalize_symbol(symbol)
+        ticker = await self.exchange.client.fetch_ticker(pair)
+        last_price = ticker.get('last')
+        if not last_price or last_price <= 0:
+            last_price = await self.exchange.get_current_price(symbol)
+        if not last_price or last_price <= 0:
+            logger.warning(f"Executor: Missing last price for {symbol}, executing without slippage check.")
+            order = await self.exchange.execute_sell_order(symbol, total_amount)
+            return [order]
         
         # Check impact
         avg_price = await self.get_liquidity_adjusted_price(symbol, total_amount, 'sell')
-        slippage = (last_price - avg_price) / last_price
+        if not avg_price or avg_price <= 0:
+            logger.warning(f"Executor: Missing liquidity price for {symbol}, executing without slippage check.")
+            order = await self.exchange.execute_sell_order(symbol, total_amount)
+            return [order]
+        slippage = max(0.0, (last_price - avg_price) / last_price)
         
         logger.info(f"Executor: Est. Slippage for {symbol}: {slippage:.4%}")
         
