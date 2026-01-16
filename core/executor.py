@@ -15,8 +15,17 @@ from core.exchange_client import ExchangeClient
 class TradeExecutor:
     def __init__(self, exchange_client: ExchangeClient, config: dict):
         self.exchange = exchange_client
-        self.slippage_tolerance = config['strategy']['slippage_tolerance_pct']
-        self.max_chunks = config['strategy']['max_slippage_retry_chunks']
+        strategy = config.get('strategy', {})
+        try:
+            self.slippage_tolerance = float(strategy.get('slippage_tolerance_pct', 0.005))
+        except (TypeError, ValueError):
+            self.slippage_tolerance = 0.005
+
+        try:
+            max_chunks = int(strategy.get('max_slippage_retry_chunks', 3))
+        except (TypeError, ValueError):
+            max_chunks = 3
+        self.max_chunks = max(1, max_chunks)
 
     async def calculate_breakeven_entry(self, symbol: str, execution_price: float, side: str = 'buy') -> float:
         """

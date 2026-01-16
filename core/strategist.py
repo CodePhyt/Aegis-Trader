@@ -16,7 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 class Strategist:
     def __init__(self, executor: TradeExecutor, config: dict):
         self.executor = executor
-        self.config = config['strategy']
+        defaults = {
+            "moonbag_target_multiplier": 2.0,
+            "initial_sell_percentage": 0.5,
+            "trailing_stop_percentage": 0.05,
+            "volatility_guard_window_seconds": 5,
+        }
+        strategy = config.get('strategy', {})
+        self.config = {**defaults, **strategy}
         self.target_multiplier = self.config['moonbag_target_multiplier']
         self.trailing_stop_pct = self.config['trailing_stop_percentage']
         self.volatility_window = self.config['volatility_guard_window_seconds']

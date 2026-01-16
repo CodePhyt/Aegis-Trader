@@ -74,13 +74,34 @@ class ExchangeClient:
         """
         try:
             balance = await self.client.fetch_balance()
-            # Filter for non-zero free balances, exclude USDT/USD usually if not trading against it
-            # But here we just want non-zero assets
-            non_zero = {
-                k: v['free'] 
-                for k, v in balance.items() 
-                if v['free'] > 0 and k not in ['USDT', 'USD', 'USDC'] # simplified exclusion
-            }
+            # Filter for non-zero free balances, exclude stablecoins.
+            # CCXT returns both aggregate keys and per-currency dicts.
+            excluded = {"USDT", "USD", "USDC"}
+            non_zero: Dict[str, float] = {}
+
+            for symbol, data in balance.items():
+                if symbol in {"info", "free", "used", "total"}:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                free = data.get("free")
+                try:
+                    free_amount = float(free)
+                except (TypeError, ValueError):
+                    continue
+                if free_amount > 0 and symbol not in excluded:
+                    non_zero[symbol] = free_amount
+
+            # Fallback to the aggregate free dict if currency entries are missing.
+            if not non_zero and isinstance(balance.get("free"), dict):
+                for symbol, free in balance["free"].items():
+                    try:
+                        free_amount = float(free)
+                    except (TypeError, ValueError):
+                        continue
+                    if free_amount > 0 and symbol not in excluded:
+                        non_zero[symbol] = free_amount
+
             return non_zero
         except Exception as e:
             self.logger.error(f"Error fetching balance: {e}")
