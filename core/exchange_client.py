@@ -62,7 +62,7 @@ class ExchangeClient:
             return {}
 
     async def get_exchange_id(self):
-        return self.client.idclose()
+        return self.client.id
 
     async def close(self):
         await self.client.close()

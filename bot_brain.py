@@ -3,7 +3,7 @@ import signal
 import sys
 import json
 from loguru import logger
-from database import get_db_session, Position, init_db
+from database import get_db_session, Position, TradeHistory, init_db
 from sqlalchemy import select
 from core.exchange_client import ExchangeClient
 from core.executor import TradeExecutor
@@ -17,6 +17,77 @@ try:
 except FileNotFoundError:
     logger.error("config.json not found! Using defaults.")
     CONFIG = {"strategy": {}, "system": {}}
+
+class MoonBagBot:
+    def __init__(self):
+        self.exchange = ExchangeClient()
+        strategy = CONFIG.get("strategy", {})
+        self.target_multiplier = strategy.get("moonbag_target_multiplier", 2.0)
+        self.initial_sell_percentage = strategy.get("initial_sell_percentage", 0.5)
+        self.trailing_stop_percentage = strategy.get("trailing_stop_percentage", 0.05)
+
+    async def sync_wallet(self, db):
+        """
+        Sync wallet balances into tracked positions.
+        """
+        balances = await self.exchange.fetch_balance()
+        for symbol, amount in balances.items():
+            stmt = select(Position).where(Position.symbol == symbol)
+            result = await db.execute(stmt)
+            pos = result.scalar_one_or_none()
+
+            if not pos:
+                price = await self.exchange.get_current_price(symbol)
+                pos = Position(
+                    symbol=symbol,
+                    entry_price=price,
+                    current_amount=amount,
+                    status="active",
+                    highest_price_seen=price,
+                )
+                db.add(pos)
+                logger.info(f"New Position Tracked: {symbol} @ {price}")
+            else:
+                if pos.current_amount != amount:
+                    pos.current_amount = amount
+
+        await db.commit()
+
+    async def check_strategy(self, db):
+        """
+        Apply the MoonBag strategy to active positions.
+        """
+        stmt = select(Position).where(Position.status == "active")
+        result = await db.execute(stmt)
+        positions = result.scalars().all()
+
+        for pos in positions:
+            current_price = await self.exchange.get_current_price(pos.symbol)
+            target_price = pos.entry_price * self.target_multiplier
+
+            if current_price >= target_price:
+                amount_to_sell = pos.current_amount * self.initial_sell_percentage
+                await self.exchange.execute_sell_order(pos.symbol, amount_to_sell)
+
+                trade = TradeHistory(
+                    symbol=pos.symbol,
+                    amount=amount_to_sell,
+                    price=current_price,
+                    type="sell",
+                )
+                db.add(trade)
+
+                pos.status = "moonbag_secured"
+                pos.is_initial_investment_recovered = True
+                pos.current_amount -= amount_to_sell
+                pos.trailing_stop_price = current_price * (1 - self.trailing_stop_percentage)
+                if pos.highest_price_seen is None or current_price > pos.highest_price_seen:
+                    pos.highest_price_seen = current_price
+
+                logger.success(f"MoonBag Secured for {pos.symbol}. Remaining: {pos.current_amount}")
+
+        await db.commit()
+
 
 class PredatorBot:
     def __init__(self):
