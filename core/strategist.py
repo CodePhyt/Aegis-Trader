@@ -7,7 +7,7 @@ It implements:
 2. Volatility Guard: Prevent selling into fakeout wicks.
 3. Hedged Trailing Stop: Protect the remaining 50% 'free roll'.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from loguru import logger
 from database import Position
 from core.executor import TradeExecutor
@@ -88,7 +88,7 @@ class Strategist:
         """
         Returns True if price has been stable/high for X seconds.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if symbol not in self.pump_candidates:
             self.pump_candidates[symbol] = (now, price)
             logger.info(f"Volatility Guard: {symbol} hit target. Waiting {self.volatility_window}s...")
