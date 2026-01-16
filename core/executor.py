@@ -35,11 +35,16 @@ class TradeExecutor:
         # most exchanges ~0.1%
         fee_rate = 0.001 
         try:
-             # Attempt to get actual markets if loaded
-             if self.exchange.client.markets:
-                 market = self.exchange.client.markets.get(symbol)
-                 if market and 'taker' in market:
-                     fee_rate = market['taker']
+            # Attempt to get actual markets if loaded
+            markets = self.exchange.client.markets
+            if markets:
+                market = markets.get(symbol)
+                if not market:
+                    market = markets.get(self.exchange.normalize_symbol(symbol))
+                if market:
+                    taker = market.get('taker')
+                    if taker is not None:
+                        fee_rate = taker
         except Exception:
             pass
 
